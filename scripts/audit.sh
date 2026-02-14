@@ -37,6 +37,12 @@ PRE_INSTALL_TMPDIR=""
 
 SELF_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
+# Detect Python 3 for AST deep analysis (optional, zero-dependency fallback)
+PYTHON3_PATH=""
+if command -v python3 &>/dev/null; then
+    PYTHON3_PATH=$(command -v python3)
+fi
+
 # Temp files for counter passing across subshells
 TMPDIR_AUDIT=$(mktemp -d)
 echo 0 > "$TMPDIR_AUDIT/findings"
@@ -1116,6 +1122,29 @@ scan_file() {
     check_high_entropy "$file"
     check_build_script_obfuscation "$file"
     check_enhanced_lifecycle "$file"
+
+    # AST deep analysis for Python files (if python3 available)
+    local ext="${file##*.}"
+    if [[ "$ext" == "py" && -n "$PYTHON3_PATH" ]]; then
+        local ast_script
+        ast_script="$(cd "$(dirname "$0")" && pwd)/ast_analyzer.py"
+        if [[ -f "$ast_script" ]]; then
+            local ast_output
+            ast_output=$("$PYTHON3_PATH" "$ast_script" --json "$file" 2>/dev/null)
+            if [[ -n "$ast_output" ]]; then
+                while IFS= read -r ast_line; do
+                    [[ -z "$ast_line" ]] && continue
+                    local a_level a_file a_lineno a_rule a_content a_fix
+                    a_level=$(echo "$ast_line" | sed 's/.*"level": *"\([^"]*\)".*/\1/')
+                    a_lineno=$(echo "$ast_line" | sed 's/.*"line": *\([0-9]*\).*/\1/')
+                    a_rule=$(echo "$ast_line" | sed 's/.*"rule": *"\([^"]*\)".*/\1/')
+                    a_content=$(echo "$ast_line" | sed 's/.*"content": *"\([^"]*\)".*/\1/')
+                    a_fix=$(echo "$ast_line" | sed 's/.*"remediation": *"\([^"]*\)".*/\1/')
+                    add_finding "$a_level" "$file" "$a_lineno" "$a_rule" "$a_content"
+                done <<< "$ast_output"
+            fi
+        fi
+    fi
 }
 
 main() {
