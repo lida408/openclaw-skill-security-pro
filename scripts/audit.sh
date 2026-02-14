@@ -212,6 +212,54 @@ is_doc_context() {
     return 1
 }
 
+# --- Safe context detection (reduce false positives in code files) ---
+# Returns 0 = safe context (likely false positive), 1 = not safe context
+is_safe_context() {
+    local file="$1"
+    local lineno="$2"
+    local ext="${file##*.}"
+
+    local line
+    line=$(sed -n "${lineno}p" "$file" 2>/dev/null)
+    [[ -z "$line" ]] && return 1
+
+    # 1. Shell/Python/Ruby comment lines (# ...)
+    if [[ "$ext" == "sh" || "$ext" == "bash" || "$ext" == "zsh" || "$ext" == "py" || "$ext" == "rb" || "$ext" == "yaml" || "$ext" == "yml" || "$ext" == "toml" || "$ext" == "cfg" || "$ext" == "conf" ]]; then
+        if echo "$line" | grep -qE '^\s*#'; then
+            return 0
+        fi
+    fi
+
+    # 2. JS/TS/C/Java single-line comment (// ...)
+    if [[ "$ext" == "js" || "$ext" == "ts" || "$ext" == "c" || "$ext" == "cpp" || "$ext" == "java" || "$ext" == "go" || "$ext" == "rs" || "$ext" == "swift" || "$ext" == "kt" ]]; then
+        if echo "$line" | grep -qE '^\s*//'; then
+            return 0
+        fi
+    fi
+
+    # 3. Inside a grep/sed/awk regex pattern (the line IS a detection rule, not malicious code)
+    if echo "$line" | grep -qE '^\s*(grep|egrep|fgrep|sed|awk|perl)\s+(-[a-zA-Z]+\s+)*'; then
+        return 0
+    fi
+
+    # 4. Echo/printf string literal (remediation text, documentation, etc.)
+    if echo "$line" | grep -qE '^\s*(echo|printf|log|warn|error|info|debug)\s'; then
+        return 0
+    fi
+
+    # 5. Case pattern or variable assignment with descriptive text
+    if echo "$line" | grep -qE '^\s*[a-z_-]+\)\s+echo\s+"'; then
+        return 0
+    fi
+
+    # 6. String variable assignment (remediation/message/description)
+    if echo "$line" | grep -qE '^\s*(local\s+|export\s+)?(msg|message|desc|description|hint|help|usage|error_msg|warn_msg|remediation|fix_hint)\s*='; then
+        return 0
+    fi
+
+    return 1
+}
+
 # --- Remediation map ---
 get_remediation() {
     local rule="$1"
@@ -383,10 +431,12 @@ check_base64_obfuscation() {
     local file="$1"
     # base64 -d piped to execution
     grep -n -E 'base64\s+(-d|--decode)\s*\|' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "CRITICAL" "$file" "$lineno" "base64-decode-pipe" "$content"
     done
     # echo ... | base64 -d variant
     grep -n -E 'echo\s+.*\|\s*base64\s+(-d|--decode)' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "CRITICAL" "$file" "$lineno" "base64-echo-decode" "$content"
     done
     # Suspiciously long base64 strings (>100 chars)
@@ -419,6 +469,7 @@ check_dangerous_permissions() {
             *"chmod +x scripts/"*|*"chmod +x audit"*|*"chmod +x ./"*) continue ;;
         esac
         if is_doc_context "$file" "$lineno"; then continue; fi
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "WARNING" "$file" "$lineno" "dangerous-permissions" "$content"
     done
 }
@@ -439,6 +490,7 @@ check_suspicious_network() {
     done
     # Reverse shell patterns
     grep -n -E 'nc\s+(-e|--exec)|ncat\s+(-e|--exec)|bash\s+-i\s+>\&\s*/dev/tcp|/dev/udp/' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "CRITICAL" "$file" "$lineno" "reverse-shell" "$content"
     done
     # Netcat listener
@@ -457,11 +509,13 @@ check_covert_execution() {
     if [[ "$ext" == "py" ]]; then
         grep -n -E 'os\.system\s*\(|subprocess\.(call|Popen|run)\s*\(|__import__\s*\(' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
             if is_doc_context "$file" "$lineno"; then continue; fi
+            if is_safe_context "$file" "$lineno"; then continue; fi
             add_finding "WARNING" "$file" "$lineno" "covert-exec-python" "$content"
         done
     elif [[ "$ext" != "md" && "$ext" != "txt" && "$ext" != "rst" ]]; then
         grep -n -E 'os\.system\s*\(|subprocess\.(call|Popen|run)\s*\(|__import__\s*\(' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
             if is_doc_context "$file" "$lineno"; then continue; fi
+            if is_safe_context "$file" "$lineno"; then continue; fi
             add_finding "WARNING" "$file" "$lineno" "covert-exec-python" "$content"
         done
     fi
@@ -476,6 +530,7 @@ check_covert_execution() {
                 esac
             fi
             if is_doc_context "$file" "$lineno"; then continue; fi
+            if is_safe_context "$file" "$lineno"; then continue; fi
             add_finding "WARNING" "$file" "$lineno" "covert-exec-eval" "$content"
         done
     fi
@@ -543,6 +598,7 @@ check_anti_sandbox() {
     local file="$1"
     grep -n -E 'ptrace\s*\(|PTRACE_TRACEME|DYLD_INSERT_LIBRARIES|DYLD_FORCE_FLAT|LD_PRELOAD\s*=' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
         if is_doc_context "$file" "$lineno"; then continue; fi
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "CRITICAL" "$file" "$lineno" "anti-sandbox" "$content"
     done
 }
@@ -568,6 +624,7 @@ check_covert_downloader() {
     done
     # PowerShell downloader
     grep -n -iE 'powershell.*downloadstring|iex\s*\(.*webclient|invoke-webrequest.*\|\s*iex' "$file" 2>/dev/null | while IFS=: read -r lineno content; do
+        if is_safe_context "$file" "$lineno"; then continue; fi
         add_finding "CRITICAL" "$file" "$lineno" "covert-downloader-powershell" "$content"
     done
 }
@@ -1071,6 +1128,8 @@ main() {
         -type f
         '!' -path '*/.git/*'
         '!' -path '*/__pycache__/*'
+        '!' -path '*/test/*' '!' -path '*/tests/*' '!' -path '*/__tests__/*'
+        '!' -path '*/spec/*' '!' -path '*/fixtures/*' '!' -path '*/testdata/*'
         '!' -name '*.png' '!' -name '*.jpg' '!' -name '*.jpeg' '!' -name '*.gif'
         '!' -name '*.ico' '!' -name '*.woff' '!' -name '*.woff2' '!' -name '*.ttf'
         '!' -name '*.zip' '!' -name '*.tar' '!' -name '*.gz' '!' -name '*.bz2'
