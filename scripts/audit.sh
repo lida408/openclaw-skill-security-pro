@@ -25,6 +25,7 @@ VERBOSE=false
 JSON_OUTPUT=false
 SARIF_OUTPUT=false
 STRICT_MODE=false
+PRE_INSTALL=false
 WHITELIST_FILE=""
 TARGET_DIR=""
 CONTEXT_LINES=2  # context lines for --verbose
@@ -32,6 +33,7 @@ MIN_SEVERITY=""      # "", "WARNING", "CRITICAL"
 FAIL_ON=""           # "", "WARNING", "CRITICAL"
 declare -a SKIP_DIRS=()
 declare -a SKIP_RULES=()
+PRE_INSTALL_TMPDIR=""
 
 SELF_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
@@ -45,7 +47,7 @@ echo 0 > "$TMPDIR_AUDIT/whitelisted"
 echo 0 > "$TMPDIR_AUDIT/files"
 FINDINGS_FILE="$TMPDIR_AUDIT/findings_json"
 touch "$FINDINGS_FILE"
-trap 'rm -rf "$TMPDIR_AUDIT"' EXIT
+trap 'rm -rf "$TMPDIR_AUDIT"; [[ -n "$PRE_INSTALL_TMPDIR" ]] && rm -rf "$PRE_INSTALL_TMPDIR"' EXIT
 
 usage() {
     cat <<EOF
@@ -65,6 +67,7 @@ Options:
   --skip-rule R     Skip a specific rule (repeatable, e.g. --skip-rule pipe-execution)
   --min-severity S  Minimum severity to report: INFO, WARNING, CRITICAL
   --fail-on S       Set exit code threshold: WARNING (default) or CRITICAL
+  --pre-install     Pre-install mode: scan BEFORE npm/pip install (accepts git URL or local dir)
   --version         Show version
   -h, --help        Show help
 
@@ -75,6 +78,7 @@ Examples:
   $(basename "$0") --skip-dir node_modules --skip-dir vendor /path/to/skills
   $(basename "$0") --skip-rule pipe-execution --min-severity WARNING /path/to/skills
   $(basename "$0") --sarif /path/to/skills > results.sarif
+  $(basename "$0") --pre-install https://github.com/user/skill-repo.git
 
 Exit codes:
   0  Clean (no findings above threshold)
@@ -91,6 +95,7 @@ while [[ $# -gt 0 ]]; do
         --json) JSON_OUTPUT=true; shift ;;
         --sarif) SARIF_OUTPUT=true; JSON_OUTPUT=true; shift ;;
         --strict) STRICT_MODE=true; shift ;;
+        --pre-install) PRE_INSTALL=true; shift ;;
         --whitelist) WHITELIST_FILE="$2"; shift 2 ;;
         --context) CONTEXT_LINES="$2"; shift 2 ;;
         --skip-dir) SKIP_DIRS+=("$2"); shift 2 ;;
@@ -105,8 +110,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$TARGET_DIR" ]]; then
-    echo "Error: Please specify a target directory to scan"
+    echo "Error: Please specify a target directory (or git URL with --pre-install) to scan"
     usage
+fi
+
+# --- Pre-install: clone git URL to temp dir ---
+if [[ "$PRE_INSTALL" == true && "$TARGET_DIR" == http* || "$TARGET_DIR" == git@* || "$TARGET_DIR" == *.git ]]; then
+    PRE_INSTALL_TMPDIR=$(mktemp -d)
+    echo "Pre-install mode: cloning $TARGET_DIR ..."
+    if ! git clone --depth 1 --config core.hooksPath=/dev/null "$TARGET_DIR" "$PRE_INSTALL_TMPDIR/repo" 2>/dev/null; then
+        echo "Error: Failed to clone $TARGET_DIR"
+        rm -rf "$PRE_INSTALL_TMPDIR"
+        exit 1
+    fi
+    TARGET_DIR="$PRE_INSTALL_TMPDIR/repo"
+    echo "Cloned to temp dir. Scanning WITHOUT running install..."
+    echo ""
 fi
 
 if [[ ! -d "$TARGET_DIR" ]]; then
@@ -1208,6 +1227,26 @@ main() {
             echo -e "  ${YELLOW}${BOLD}WARN - Potential risks found. Manual review recommended.${NC}"
         else
             echo -e "  ${CYAN}INFO - Only informational findings.${NC}"
+        fi
+
+        # Pre-install verdict
+        if [[ "$PRE_INSTALL" == true ]]; then
+            echo ""
+            echo -e "${BOLD}-----------------------------------------------${NC}"
+            echo -e "${BOLD}  Pre-Install Verdict${NC}"
+            echo -e "${BOLD}-----------------------------------------------${NC}"
+            if [[ $cc -gt 0 ]]; then
+                echo -e "  ${RED}${BOLD}🚫 DO NOT INSTALL${NC}"
+                echo -e "  ${RED}Critical security issues found. This skill may contain malicious code.${NC}"
+                echo -e "  ${RED}Running npm/pip install is NOT safe.${NC}"
+            elif [[ $wc -gt 0 ]]; then
+                echo -e "  ${YELLOW}${BOLD}⚠️  INSTALL WITH CAUTION${NC}"
+                echo -e "  ${YELLOW}Warnings found. Review the findings above before installing.${NC}"
+                echo -e "  ${YELLOW}If you trust the source, you may proceed with: npm install / pip install${NC}"
+            else
+                echo -e "  ${GREEN}${BOLD}✅ SAFE TO INSTALL${NC}"
+                echo -e "  ${GREEN}No security issues found. You may safely run: npm install / pip install${NC}"
+            fi
         fi
         echo ""
     fi
