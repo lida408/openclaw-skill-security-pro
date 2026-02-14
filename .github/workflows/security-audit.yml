@@ -1,4 +1,4 @@
-name: Security Audit CI
+name: 🦒 Giraffe Guard CI
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
         id: audit
         run: |
           chmod +x scripts/audit.sh
-          echo "## 🛡️ Security Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo "## 🦒 Giraffe Guard Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Run scan, capture output
@@ -70,11 +70,11 @@ jobs:
 
             let body;
             if (exitCode === '0') {
-              body = '## 🛡️ Security Audit\n\n✅ **All clean!** No security findings detected.';
+              body = '## 🦒 Giraffe Guard\n\n✅ **All clean!** No security findings detected.';
             } else if (exitCode === '2') {
-              body = `## 🛡️ Security Audit\n\n❌ **Failed** — found ${critical} critical and ${warning} warning issues.\n\nPlease check the Actions log for details.`;
+              body = `## 🦒 Giraffe Guard\n\n❌ **Failed** — found ${critical} critical and ${warning} warning issues.\n\nPlease check the Actions log for details.`;
             } else {
-              body = `## 🛡️ Security Audit\n\n⚠️ **Warnings** — found ${warning} warning-level issues.\n\nPlease review the Actions log for details.`;
+              body = `## 🦒 Giraffe Guard\n\n⚠️ **Warnings** — found ${warning} warning-level issues.\n\nPlease review the Actions log for details.`;
             }
 
             // Find and update existing comment or create new
@@ -83,7 +83,7 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const botComment = comments.find(c => c.body.includes('## 🛡️ Security Audit'));
+            const botComment = comments.find(c => c.body.includes('## 🦒 Giraffe Guard'));
 
             if (botComment) {
               await github.rest.issues.updateComment({

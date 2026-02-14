@@ -565,7 +565,7 @@ print_banner() {
     if [[ "$JSON_OUTPUT" != true ]]; then
         echo ""
         echo -e "${BOLD}╔═══════════════════════════════════════════════╗${NC}"
-        echo -e "${BOLD}║   🛡️  OpenClaw Skill Security Auditor v${VERSION}   ║${NC}"
+        echo -e "${BOLD}║   🦒 Giraffe Guard v${VERSION} — 长颈鹿卫士        ║${NC}"
         echo -e "${BOLD}╚═══════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "  ${CYAN}扫描目标:${NC} $TARGET_DIR"

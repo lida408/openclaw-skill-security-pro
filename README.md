@@ -1,4 +1,6 @@
-# 🛡️ OpenClaw Skill Security Auditor
+# 🦒 Giraffe Guard — 长颈鹿卫士
+
+**Standing tall, watching over your code.**
 
 [English](#english) | [中文](#中文)
 
@@ -9,7 +11,7 @@
 
 A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills — detect supply chain attacks, malicious code, and suspicious patterns before they compromise your system.
 
-> Born from a real supply chain poisoning incident in the OpenClaw community. Stay safe.
+> Born from a real supply chain poisoning incident in the OpenClaw community. Stand tall, stay safe. 🦒
 
 ### Features
 
@@ -27,7 +29,7 @@ A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills �
 
 ```bash
 # Clone into your OpenClaw skills directory
-git clone https://github.com/lida408/openclaw-skill-security-pro.git \
+git clone https://github.com/lida408/giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
 # Scan your skills
@@ -37,7 +39,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 #### Standalone
 
 ```bash
-git clone https://github.com/lida408/openclaw-skill-security-pro.git
+git clone https://github.com/lida408/giraffe-guard.git
 cd openclaw-skill-security-pro
 bash scripts/audit.sh /path/to/scan
 ```
@@ -159,7 +161,7 @@ Schedule daily scans via OpenClaw cron:
 
 [OpenClaw](https://github.com/openclaw/openclaw) 技能安全扫描器 —— 在供应链攻击、恶意代码和可疑模式危害你的系统之前将其检测出来。
 
-> 诞生于 OpenClaw 社区中一起真实的供应链投毒事件。保持警惕。
+> 诞生于 OpenClaw 社区中一起真实的供应链投毒事件。站得高，看得远。🦒
 
 ### 特性
 
@@ -177,7 +179,7 @@ Schedule daily scans via OpenClaw cron:
 
 ```bash
 # 克隆到 OpenClaw 技能目录
-git clone https://github.com/lida408/openclaw-skill-security-pro.git \
+git clone https://github.com/lida408/giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
 # 扫描你的技能
@@ -187,7 +189,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 #### 独立使用
 
 ```bash
-git clone https://github.com/lida408/openclaw-skill-security-pro.git
+git clone https://github.com/lida408/giraffe-guard.git
 cd openclaw-skill-security-pro
 bash scripts/audit.sh /要扫描的路径
 ```
