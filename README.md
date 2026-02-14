@@ -29,7 +29,7 @@ A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills �
 
 ```bash
 # Clone into your OpenClaw skills directory
-git clone https://github.com/lida408/giraffe-guard.git \
+git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
 # Scan your skills
@@ -39,7 +39,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 #### Standalone
 
 ```bash
-git clone https://github.com/lida408/giraffe-guard.git
+git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git
 cd openclaw-skill-security-pro
 bash scripts/audit.sh /path/to/scan
 ```
@@ -179,7 +179,7 @@ Schedule daily scans via OpenClaw cron:
 
 ```bash
 # 克隆到 OpenClaw 技能目录
-git clone https://github.com/lida408/giraffe-guard.git \
+git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
 # 扫描你的技能
@@ -189,7 +189,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 #### 独立使用
 
 ```bash
-git clone https://github.com/lida408/giraffe-guard.git
+git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git
 cd openclaw-skill-security-pro
 bash scripts/audit.sh /要扫描的路径
 ```
