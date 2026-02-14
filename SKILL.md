@@ -1,101 +1,117 @@
 # security-audit
 
-扫描 OpenClaw skill 目录，检测潜在的供应链投毒和恶意代码。
+Scan OpenClaw skill directories for supply chain attacks and malicious code.
 
-## 功能
+## Features
 
-- 17 类安全检测规则，覆盖供应链攻击全链路
-- **上下文感知**：区分文档描述和实际可执行代码，降低误报
-- 彩色终端输出（红=严重, 黄=警告, 蓝=信息, 绿=安全）
-- JSON 格式报告输出
-- `--verbose` 模式显示匹配行上下文
-- 白名单机制，支持排除已知安全条目
-- 兼容 macOS 和 Linux，零外部依赖
+- 22 security detection rules covering the full supply chain attack surface
+- **Context-aware**: distinguishes documentation from executable code, reducing false positives
+- Colored terminal output (red=critical, yellow=warning, blue=info, green=safe)
+- JSON report output
+- `--verbose` mode shows matching line context
+- Whitelist support for excluding known-safe entries
+- `--skip-dir` to exclude directories (e.g. node_modules, vendor)
+- Compatible with macOS and Linux, zero external dependencies
 
-## 使用方法
+## Usage
 
-### 扫描 skill 目录
+### Scan a skill directory
 
 ```bash
 {baseDir}/scripts/audit.sh /path/to/skills
 ```
 
-### 详细模式（显示上下文行）
+### Verbose mode (show context lines)
 
 ```bash
 {baseDir}/scripts/audit.sh --verbose /path/to/skills
 ```
 
-### 输出 JSON 格式报告
+### JSON report output
 
 ```bash
 {baseDir}/scripts/audit.sh --json /path/to/skills
 ```
 
-### 使用白名单
+### With whitelist
 
 ```bash
 {baseDir}/scripts/audit.sh --whitelist whitelist.txt /path/to/skills
 ```
 
-白名单文件格式（每行一条，# 开头为注释）：
+Whitelist file format (one entry per line, # for comments):
 ```
-# 整个文件加白
+# Whitelist entire file
 path/to/file.sh
-# 特定行号加白
+# Whitelist specific line number
 path/to/file.sh:42
-# 特定规则加白
+# Whitelist specific rule
 path/to/file.sh:pipe-execution
 ```
 
-### 组合使用
+### Skip directories
 
 ```bash
-{baseDir}/scripts/audit.sh --verbose --context 3 --whitelist whitelist.txt /path/to/skills
+{baseDir}/scripts/audit.sh --skip-dir node_modules --skip-dir vendor /path/to/skills
 ```
 
-## 检测规则（17 条）
+### Combined usage
 
-### 🔴 严重级别
-| 编号 | 规则 | 说明 |
-|------|------|------|
-| 1 | pipe-execution | 管道执行（curl/wget 管道到 bash/sh/python 等） |
-| 2 | base64-decode-pipe | Base64 解码后管道执行 |
-| 3 | security-bypass | macOS 安全机制绕过（Gatekeeper/SIP） |
-| 5 | tor-onion-address | Tor 暗网地址 |
-| 5 | reverse-shell | 反向 shell 模式 |
-| 7 | file-type-disguise | 文本扩展名伪装二进制文件（Mach-O/ELF/PE） |
-| 8 | ssh-key-exfiltration | SSH 密钥窃取 |
-| 8 | cloud-credential-access | 云凭证访问 |
-| 8 | env-exfiltration | 通过网络发送环境变量 |
-| 9 | anti-sandbox | 反沙盒/反调试（ptrace/DYLD 注入） |
-| 10 | covert-downloader | 单行脚本下载器（Python/Node/Ruby/Perl/PowerShell） |
-| 11 | persistence-launchagent | macOS 持久化（LaunchAgent 创建） |
-| 13 | string-concat-bypass | 字符串拼接绕过检测 |
-| 15 | env-file-leak | .env 文件含真实密钥 |
-| 16 | typosquat-npm/pip | npm/pip 包名 typosquatting |
-| 17 | malicious-postinstall | package.json/setup.py 恶意生命周期脚本 |
+```bash
+{baseDir}/scripts/audit.sh --verbose --context 3 --whitelist whitelist.txt --skip-dir node_modules /path/to/skills
+```
 
-### 🟡 警告级别
-| 编号 | 规则 | 说明 |
-|------|------|------|
-| 2 | long-base64-string | 超长 Base64 编码字符串 |
-| 4 | dangerous-permissions | 危险权限修改 |
-| 5 | suspicious-network-ip | 非本地 IP 直连 |
-| 5 | netcat-listener | netcat 监听 |
-| 6 | covert-exec-eval | 可疑 eval 调用 |
-| 11 | cron-injection | 定时任务注入 |
-| 12 | hidden-executable | 隐藏的可执行文件 |
-| 13 | hex/unicode-obfuscation | hex/Unicode 转义混淆 |
-| 14 | symlink-sensitive | 符号链接指向敏感位置 |
-| 16 | custom-registry | 非官方包管理 registry |
+## Detection Rules (22)
 
-## 退出码
+### Critical Level
+| # | Rule | Description |
+|---|------|-------------|
+| 1 | pipe-execution | Pipe execution (curl/wget piped to bash/sh/python) |
+| 2 | base64-decode-pipe | Base64 decoded and piped to execution |
+| 3 | security-bypass | macOS security bypass (Gatekeeper/SIP) |
+| 5 | tor-onion-address | Tor hidden service addresses |
+| 5 | reverse-shell | Reverse shell patterns |
+| 7 | file-type-disguise | Binary disguised with text extension (Mach-O/ELF/PE) |
+| 8 | ssh-key-exfiltration | SSH key theft |
+| 8 | cloud-credential-access | Cloud credential access |
+| 8 | env-exfiltration | Environment variables sent over network |
+| 9 | anti-sandbox | Anti-sandbox/anti-debug (ptrace/DYLD injection) |
+| 10 | covert-downloader | One-liner downloaders (Python/Node/Ruby/Perl/PowerShell) |
+| 11 | persistence-launchagent | macOS persistence (LaunchAgent creation) |
+| 13 | string-concat-bypass | String concatenation to evade detection |
+| 15 | env-file-leak | .env file containing real secrets |
+| 16 | typosquat-npm/pip | npm/pip package typosquatting |
+| 17 | malicious-postinstall | Malicious lifecycle scripts (package.json/setup.py) |
+| 18 | git-hooks | Active git hooks (auto-execute on git operations) |
+| 19 | sensitive-file-leak | Private keys, credentials committed to repo |
+| 20 | skillmd-prompt-injection | Prompt injection in SKILL.md |
+| 21 | dockerfile-privileged | Docker privileged mode |
+| 22 | zero-width-chars | Hidden zero-width Unicode characters |
 
-- `0` — 安全，无发现
-- `1` — 有警告级别发现
-- `2` — 有严重级别发现
+### Warning Level
+| # | Rule | Description |
+|---|------|-------------|
+| 2 | long-base64-string | Suspiciously long Base64 strings |
+| 4 | dangerous-permissions | Dangerous permission changes |
+| 5 | suspicious-network-ip | Non-local IP direct connections |
+| 5 | netcat-listener | Netcat listeners |
+| 6 | covert-exec-eval | Suspicious eval() calls (covers JS/TS) |
+| 6 | covert-exec-python | os.system/subprocess in Python files |
+| 11 | cron-injection | Scheduled task injection |
+| 12 | hidden-executable | Hidden executable files |
+| 13 | hex/unicode-obfuscation | Hex/Unicode escape obfuscation |
+| 14 | symlink-sensitive | Symlinks pointing to sensitive locations |
+| 16 | custom-registry | Non-official package registries |
+| 20 | skillmd-privilege-escalation | Privilege escalation in SKILL.md |
+| 21 | dockerfile-sensitive-mount | Sensitive host directory mounts |
+| 21 | dockerfile-host-network | Host network mode |
 
-## 依赖
+## Exit Codes
 
-无外部依赖，仅使用系统自带工具：bash, grep, sed, find, file, awk, readlink
+- `0` -- Clean, no findings
+- `1` -- Warning-level findings
+- `2` -- Critical-level findings
+
+## Dependencies
+
+No external dependencies. Only uses system tools: bash, grep, sed, find, file, awk, readlink
