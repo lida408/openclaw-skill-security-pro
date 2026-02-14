@@ -1,10 +1,17 @@
 # 🛡️ OpenClaw Skill Security Auditor
 
+[English](#english) | [中文](#中文)
+
+---
+
+<a id="english"></a>
+## English
+
 A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills — detect supply chain attacks, malicious code, and suspicious patterns before they compromise your system.
 
 > Born from a real supply chain poisoning incident in the OpenClaw community. Stay safe.
 
-## Features
+### Features
 
 - **17 detection rules** covering the full supply chain attack surface
 - **Context-aware** — distinguishes documentation from executable code (low false positives)
@@ -14,28 +21,28 @@ A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills �
 - **Whitelist support** — suppress known-safe findings
 - **Verbose mode** — show surrounding context lines for each finding
 
-## Quick Start
+### Quick Start
 
-### As an OpenClaw Skill
+#### As an OpenClaw Skill
 
 ```bash
 # Clone into your OpenClaw skills directory
-git clone https://github.com/huixingxiaohuoban/openclaw-skill-security-audit.git \
+git clone https://github.com/lida408/openclaw-skill-security-pro.git \
   ~/.openclaw/workspace/skills/security-audit
 
 # Scan your skills
 bash ~/.openclaw/workspace/skills/security-audit/scripts/audit.sh ~/.openclaw/workspace/skills/
 ```
 
-### Standalone
+#### Standalone
 
 ```bash
-git clone https://github.com/huixingxiaohuoban/openclaw-skill-security-audit.git
-cd openclaw-skill-security-audit
+git clone https://github.com/lida408/openclaw-skill-security-pro.git
+cd openclaw-skill-security-pro
 bash scripts/audit.sh /path/to/scan
 ```
 
-## Usage
+### Usage
 
 ```bash
 # Basic scan
@@ -54,9 +61,9 @@ bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
 bash scripts/audit.sh --verbose --context 5 /path/to/skills
 ```
 
-## Detection Rules
+### Detection Rules
 
-### 🔴 Critical (immediate action required)
+#### 🔴 Critical (immediate action required)
 
 | # | Rule | Description |
 |---|------|-------------|
@@ -77,7 +84,7 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 16 | typosquat-npm/pip | Typosquatting package names |
 | 17 | malicious-postinstall | Malicious lifecycle scripts |
 
-### 🟡 Warning (manual review recommended)
+#### 🟡 Warning (manual review recommended)
 
 | # | Rule | Description |
 |---|------|-------------|
@@ -92,9 +99,7 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 14 | symlink-sensitive | Symlinks pointing to sensitive locations |
 | 16 | custom-registry | Non-official package registries |
 
-## Whitelist File Format
-
-Create a whitelist file to suppress known-safe findings:
+### Whitelist File Format
 
 ```txt
 # Whitelist entire file
@@ -107,7 +112,7 @@ path/to/file.sh:42
 path/to/file.sh:pipe-execution
 ```
 
-## Exit Codes
+### Exit Codes
 
 | Code | Meaning |
 |------|---------|
@@ -115,7 +120,7 @@ path/to/file.sh:pipe-execution
 | 1 | 🟡 Warnings found |
 | 2 | 🔴 Critical findings |
 
-## CI/CD Integration
+### CI/CD Integration
 
 ```yaml
 # GitHub Actions example
@@ -129,7 +134,7 @@ path/to/file.sh:pipe-execution
     fi
 ```
 
-## Automation with OpenClaw
+### Automation with OpenClaw
 
 Add to your `TOOLS.md` to enforce scanning on every skill install:
 
@@ -147,16 +152,154 @@ Schedule daily scans via OpenClaw cron:
 0 4 * * * bash skills/security-audit/scripts/audit.sh /path/to/skills
 ```
 
-## License
+---
+
+<a id="中文"></a>
+## 中文
+
+[OpenClaw](https://github.com/openclaw/openclaw) 技能安全扫描器 —— 在供应链攻击、恶意代码和可疑模式危害你的系统之前将其检测出来。
+
+> 诞生于 OpenClaw 社区中一起真实的供应链投毒事件。保持警惕。
+
+### 特性
+
+- **17 条检测规则**，覆盖供应链攻击全链路
+- **上下文感知** —— 自动区分文档描述和可执行代码，大幅降低误报
+- **零外部依赖** —— 仅使用 bash、grep、sed、find、file、awk
+- **跨平台** —— 兼容 macOS (BSD) 和 Linux (GNU)
+- **多种输出格式** —— 彩色终端输出、JSON 报告
+- **白名单支持** —— 排除已知安全的条目
+- **详细模式** —— 显示匹配行的上下文
+
+### 快速开始
+
+#### 作为 OpenClaw Skill 使用
+
+```bash
+# 克隆到 OpenClaw 技能目录
+git clone https://github.com/lida408/openclaw-skill-security-pro.git \
+  ~/.openclaw/workspace/skills/security-audit
+
+# 扫描你的技能
+bash ~/.openclaw/workspace/skills/security-audit/scripts/audit.sh ~/.openclaw/workspace/skills/
+```
+
+#### 独立使用
+
+```bash
+git clone https://github.com/lida408/openclaw-skill-security-pro.git
+cd openclaw-skill-security-pro
+bash scripts/audit.sh /要扫描的路径
+```
+
+### 使用方法
+
+```bash
+# 基本扫描
+bash scripts/audit.sh /path/to/skills
+
+# 详细模式（显示匹配行上下文）
+bash scripts/audit.sh --verbose /path/to/skills
+
+# JSON 格式输出（适合 CI/CD 集成）
+bash scripts/audit.sh --json /path/to/skills
+
+# 指定白名单
+bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
+
+# 自定义上下文行数（默认 2 行）
+bash scripts/audit.sh --verbose --context 5 /path/to/skills
+```
+
+### 检测规则
+
+#### 🔴 严重级别（需立即处理）
+
+| 编号 | 规则 | 说明 |
+|------|------|------|
+| 1 | pipe-execution | 管道执行（curl/wget 管道到 bash/sh/python） |
+| 2 | base64-decode-pipe | Base64 解码后管道执行 |
+| 3 | security-bypass | macOS 安全机制绕过（Gatekeeper/SIP） |
+| 5 | tor-onion-address | Tor 暗网地址 |
+| 5 | reverse-shell | 反向 shell 模式 |
+| 7 | file-type-disguise | 文本扩展名伪装二进制文件（Mach-O/ELF/PE） |
+| 8 | ssh-key-exfiltration | SSH 密钥通过网络外传 |
+| 8 | cloud-credential-access | 云服务凭证访问（AWS/GCP/Azure） |
+| 8 | env-exfiltration | 环境变量通过网络外传 |
+| 9 | anti-sandbox | 反沙盒/反调试技术 |
+| 10 | covert-downloader | 单行脚本下载器（Python/Node/Ruby/Perl/PowerShell） |
+| 11 | persistence-launchagent | macOS LaunchAgent 持久化 |
+| 13 | string-concat-bypass | 字符串拼接绕过检测 |
+| 15 | env-file-leak | .env 文件包含真实密钥 |
+| 16 | typosquat-npm/pip | npm/pip 包名 typosquatting |
+| 17 | malicious-postinstall | 恶意生命周期脚本（postinstall/setup.py） |
+
+#### 🟡 警告级别（建议人工复核）
+
+| 编号 | 规则 | 说明 |
+|------|------|------|
+| 2 | long-base64-string | 超长 Base64 编码字符串 |
+| 4 | dangerous-permissions | 危险权限修改 |
+| 5 | suspicious-network-ip | 非本地 IP 直连 |
+| 5 | netcat-listener | netcat 监听 |
+| 6 | covert-exec-eval | 可疑 eval() 调用 |
+| 11 | cron-injection | 定时任务注入 |
+| 12 | hidden-executable | 隐藏的可执行文件 |
+| 13 | hex/unicode-obfuscation | hex/Unicode 转义混淆 |
+| 14 | symlink-sensitive | 符号链接指向敏感位置 |
+| 16 | custom-registry | 使用非官方包管理 registry |
+
+### 白名单格式
+
+```txt
+# 整个文件加白
+path/to/trusted-file.sh
+
+# 特定行号加白
+path/to/file.sh:42
+
+# 特定规则加白
+path/to/file.sh:pipe-execution
+```
+
+### 退出码
+
+| 退出码 | 含义 |
+|--------|------|
+| 0 | ✅ 安全 — 无发现 |
+| 1 | 🟡 有警告级别发现 |
+| 2 | 🔴 有严重级别发现 |
+
+### 在 OpenClaw 中自动化
+
+在 `TOOLS.md` 中添加规则，强制每次安装 skill 前扫描：
+
+```markdown
+## 🛡️ Skill 安全审计（强制规则）
+每个新 skill 必须扫描后才能启用：
+1. 运行：`bash skills/security-audit/scripts/audit.sh <新skill路径>`
+2. 退出码 0 → 安全可用
+3. 退出码 1 → 告知用户警告内容
+4. 退出码 2 → 禁止启用，通知用户
+```
+
+通过 OpenClaw cron 设置每日自动巡检：
+```
+0 4 * * * bash skills/security-audit/scripts/audit.sh /path/to/skills
+```
+
+---
+
+## License / 许可证
 
 [Apache License 2.0](LICENSE)
 
-## Contributing
+## Contributing / 贡献
 
-Issues and PRs welcome. When adding new detection rules:
+欢迎提交 Issue 和 PR。添加新检测规则时请：
 
-1. Add the check function in `scripts/audit.sh`
-2. Call it from `scan_file()` (file-level) or `main()` (directory-level)
-3. Update `SKILL.md` rule table
-4. Test against both clean skills and malicious samples
-5. Ensure zero false positives on standard OpenClaw bundled skills
+1. 在 `scripts/audit.sh` 中添加检测函数
+2. 在 `scan_file()`（文件级）或 `main()`（目录级）中调用
+3. 更新 `SKILL.md` 规则表
+4. 用正常 skill 和恶意样本分别测试
+5. 确保对 OpenClaw 内置 skill 零误报
