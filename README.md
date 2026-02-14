@@ -15,14 +15,15 @@ A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills �
 
 ### Features
 
-- **22 detection rules** covering the full supply chain attack surface
+- **55+ detection rules** — 38 grep-based + 17 AST-based for semantic Python analysis
+- **AST deep analysis** — catches variable concatenation, eval/exec evasion, dynamic imports, getattr obfuscation (requires Python 3)
 - **Context-aware** — distinguishes documentation from executable code (low false positives)
-- **Zero dependencies** — only uses bash, grep, sed, find, file, awk, perl
+- **Pre-install mode** — scan git repos *before* `npm install` / `pip install`
+- **Zero dependencies** — only uses bash, grep, sed, find, awk; AST module uses Python stdlib
 - **Cross-platform** — macOS (BSD) and Linux (GNU) compatible
-- **Multiple output formats** — colored terminal, JSON reports
-- **Whitelist support** — suppress known-safe findings
-- **Verbose mode** — show surrounding context lines for each finding
-- **Skip directories** — exclude directories like node_modules or vendor
+- **Multiple output formats** — colored terminal, JSON, SARIF (GitHub Code Scanning)
+- **Configurable** — severity thresholds, rule skipping, whitelist, quiet mode
+- **CI/CD ready** — exit codes, JSON output, SARIF, `--quiet` for minimal output
 
 ### Quick Start
 
@@ -43,74 +44,94 @@ cd openclaw-skill-giraffe-guard
 bash scripts/audit.sh /path/to/scan
 ```
 
+#### Pre-install scan (recommended)
+
+```bash
+# Scan a git repo BEFORE installing
+bash scripts/audit.sh --pre-install https://github.com/user/some-skill.git
+
+# Scan a local directory before installing
+bash scripts/audit.sh --pre-install /path/to/downloaded/skill
+```
+
 ### Usage
 
 ```bash
 # Basic scan
 bash scripts/audit.sh /path/to/skills
 
+# Pre-install mode (scan before npm/pip install)
+bash scripts/audit.sh --pre-install https://github.com/user/skill-repo.git
+
+# Quiet mode (summary only, ideal for CI/CD)
+bash scripts/audit.sh --quiet --fail-on CRITICAL /path/to/skills
+
+# SARIF output (for GitHub Code Scanning)
+bash scripts/audit.sh --sarif /path/to/skills > results.sarif
+
+# JSON output
+bash scripts/audit.sh --json /path/to/skills
+
 # Verbose mode (show context lines around findings)
 bash scripts/audit.sh --verbose /path/to/skills
 
-# JSON output (for CI/CD integration)
-bash scripts/audit.sh --json /path/to/skills
+# Skip specific rules
+bash scripts/audit.sh --skip-rule pipe-execution --skip-rule dangerous-permissions /path/to/skills
+
+# Only report critical findings
+bash scripts/audit.sh --min-severity CRITICAL /path/to/skills
+
+# Strict mode (enable high entropy detection)
+bash scripts/audit.sh --strict /path/to/skills
+
+# List all available rules
+bash scripts/audit.sh --list-rules
 
 # With whitelist
 bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
-
-# Custom context lines (default: 2)
-bash scripts/audit.sh --verbose --context 5 /path/to/skills
-
-# Skip directories (repeatable)
-bash scripts/audit.sh --skip-dir node_modules --skip-dir vendor /path/to/skills
 ```
+
+### All Options
+
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Show context lines around findings |
+| `--json` | JSON output |
+| `--sarif` | SARIF output (GitHub Code Scanning) |
+| `--strict` | Enable high entropy string detection |
+| `--quiet` | Quiet mode: summary + exit code only |
+| `--whitelist F` | Specify whitelist file |
+| `--context N` | Context lines for verbose mode (default: 2) |
+| `--skip-dir D` | Skip directory (repeatable) |
+| `--skip-rule R` | Skip rule by name (repeatable, see `--list-rules`) |
+| `--min-severity S` | Minimum severity: INFO, WARNING, CRITICAL |
+| `--fail-on S` | Exit code threshold: WARNING (default), CRITICAL |
+| `--pre-install` | Scan before install (accepts git URL or local dir) |
+| `--list-rules` | List all detection rules with descriptions |
+| `--version` | Show version |
 
 ### Detection Rules
 
-#### 🔴 Critical (immediate action required)
+Run `bash scripts/audit.sh --list-rules` for the full list with descriptions.
 
-| # | Rule | Description |
-|---|------|-------------|
-| 1 | pipe-execution | Remote code piped to shell (`curl \| bash`) |
-| 2 | base64-decode-pipe | Base64 decoded and executed |
-| 3 | security-bypass | macOS Gatekeeper/SIP bypass |
-| 5 | tor-onion-address | Tor hidden service addresses |
-| 5 | reverse-shell | Reverse shell patterns |
-| 7 | file-type-disguise | Binary masquerading as text file |
-| 8 | ssh-key-exfiltration | SSH key theft via network |
-| 8 | cloud-credential-access | Cloud credential access (AWS/GCP/Azure) |
-| 8 | env-exfiltration | Environment variables sent over network |
-| 9 | anti-sandbox | Anti-debug/anti-sandbox techniques |
-| 10 | covert-downloader | One-liner downloaders (Python/Node/Ruby/Perl/PowerShell) |
-| 11 | persistence-launchagent | macOS LaunchAgent persistence |
-| 13 | string-concat-bypass | String concatenation to evade detection |
-| 15 | env-file-leak | `.env` file containing real secrets |
-| 16 | typosquat-npm/pip | Typosquatting package names |
-| 17 | malicious-postinstall | Malicious lifecycle scripts |
-| 18 | git-hooks | Active git hooks that auto-execute |
-| 19 | sensitive-file-leak | Private keys, credentials committed to repo |
-| 20 | skillmd-prompt-injection | Prompt injection in SKILL.md |
-| 21 | dockerfile-privileged | Privileged Docker containers |
-| 22 | zero-width-chars | Hidden zero-width Unicode characters |
+#### Grep-based rules (38 rules, always active)
 
-#### 🟡 Warning (manual review recommended)
+**Critical:**
+pipe-execution, base64-decode-pipe, base64-echo-decode, security-bypass, tor-onion-address, reverse-shell, anti-sandbox, covert-downloader-python, covert-downloader-node, covert-downloader-powershell, persistence-launchagent, hardcoded-aws-key, hardcoded-github-token, hardcoded-stripe-key, hardcoded-slack-token, hardcoded-private-key, actions-script-injection, pyproject-suspicious-hook
 
-| # | Rule | Description |
-|---|------|-------------|
-| 2 | long-base64-string | Suspiciously long Base64 strings |
-| 4 | dangerous-permissions | Dangerous permission changes |
-| 5 | suspicious-network-ip | Direct IP connections (non-local) |
-| 5 | netcat-listener | Netcat listeners |
-| 6 | covert-exec-eval | Suspicious eval() calls (includes JS/TS) |
-| 6 | covert-exec-python | os.system/subprocess in Python files |
-| 11 | cron-injection | Cron/launchctl/systemd injection |
-| 12 | hidden-executable | Hidden executable files |
-| 13 | hex/unicode-obfuscation | Hex/Unicode escape obfuscation |
-| 14 | symlink-sensitive | Symlinks pointing to sensitive locations |
-| 16 | custom-registry | Non-official package registries |
-| 20 | skillmd-privilege-escalation | Privilege escalation in SKILL.md |
-| 21 | dockerfile-sensitive-mount | Sensitive host directory mounts |
-| 21 | dockerfile-host-network | Host network mode |
+**Warning:**
+long-base64-string, dangerous-permissions, suspicious-network-ip, netcat-listener, covert-exec-python, covert-exec-eval, file-disguise, sensitive-data-access, cron-injection, encoding-obfuscation, suspicious-npm-package, postinstall-script, skillmd-injection, dockerfile-privileged, zero-width-chars, hardcoded-slack-webhook, hardcoded-generic-secret, actions-unpinned, actions-excessive-permissions, build-script-download, build-script-obfuscation, npm-obfuscated-lifecycle, gemfile-untrusted-source
+
+#### AST-based rules (17 rules, Python files, requires python3)
+
+**Critical:**
+ast-eval-dynamic, ast-dynamic-import, ast-getattr-dangerous, ast-command-concat, ast-command-fstring, ast-b64-exec, ast-system-write, ast-string-concat-cmd
+
+**Warning:**
+ast-compile-exec, ast-dangerous-import, ast-getattr-dynamic, ast-suspicious-command, ast-codec-obfuscation, ast-high-entropy-string
+
+**Info:**
+ast-system-read, ast-env-access, ast-bare-except-pass
 
 ### Whitelist File Format
 
@@ -129,22 +150,25 @@ path/to/file.sh:pipe-execution
 
 | Code | Meaning |
 |------|---------|
-| 0 | ✅ Clean — no findings |
-| 1 | 🟡 Warnings found |
-| 2 | 🔴 Critical findings |
+| 0 | Clean — no findings above threshold |
+| 1 | Warnings found |
+| 2 | Critical findings |
 
 ### CI/CD Integration
 
 ```yaml
-# GitHub Actions example
+# GitHub Actions — fail on critical only
 - name: Security Audit
   run: |
-    bash scripts/audit.sh --json ./skills > audit-report.json
-    EXIT_CODE=$?
-    if [ $EXIT_CODE -eq 2 ]; then
-      echo "::error::Critical security findings detected!"
-      exit 1
-    fi
+    bash scripts/audit.sh --quiet --fail-on CRITICAL ./skills
+    
+# GitHub Actions — SARIF upload
+- name: Security Audit (SARIF)
+  run: bash scripts/audit.sh --sarif ./skills > results.sarif
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
 ```
 
 ### Automation with OpenClaw
@@ -154,15 +178,10 @@ Add to your `TOOLS.md` to enforce scanning on every skill install:
 ```markdown
 ## Skill Security Audit (mandatory)
 Every new skill must be scanned before activation:
-1. Run: `bash skills/security-pro/scripts/audit.sh <new-skill-path>`
+1. Run: `bash skills/security-pro/scripts/audit.sh --pre-install <new-skill-url>`
 2. Exit 0 → safe to use
 3. Exit 1 → report warnings to user
 4. Exit 2 → block activation, notify user
-```
-
-Schedule daily scans via OpenClaw cron:
-```
-0 4 * * * bash skills/security-pro/scripts/audit.sh /path/to/skills
 ```
 
 ---
@@ -176,14 +195,15 @@ Schedule daily scans via OpenClaw cron:
 
 ### 特性
 
-- **22 条检测规则**，覆盖供应链攻击全链路
-- **上下文感知** —— 自动区分文档描述和可执行代码，大幅降低误报
-- **零外部依赖** —— 仅使用 bash、grep、sed、find、file、awk、perl
-- **跨平台** —— 兼容 macOS (BSD) 和 Linux (GNU)
-- **多种输出格式** —— 彩色终端输出、JSON 报告
-- **白名单支持** —— 排除已知安全的条目
-- **详细模式** —— 显示匹配行的上下文
-- **目录跳过** —— 排除 node_modules、vendor 等目录
+- **55+ 条检测规则** — 38 条 grep 规则 + 17 条 AST 语义分析规则
+- **AST 深度分析** — 捕获变量拼接、eval/exec 逃逸、动态导入、getattr 混淆等 grep 无法发现的高级攻击（需要 Python 3）
+- **上下文感知** — 自动区分文档描述和可执行代码，大幅降低误报
+- **安装前扫描** — 在 `npm install` / `pip install` 之前扫描 git 仓库
+- **零外部依赖** — 仅使用 bash、grep、sed、find、awk；AST 模块仅用 Python 标准库
+- **跨平台** — 兼容 macOS (BSD) 和 Linux (GNU)
+- **多种输出格式** — 彩色终端、JSON、SARIF（GitHub Code Scanning）
+- **高度可配置** — 严重级别过滤、规则跳过、白名单、静默模式
+- **CI/CD 就绪** — 退出码、JSON 输出、SARIF、`--quiet` 最小输出
 
 ### 快速开始
 
@@ -201,7 +221,17 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 ```bash
 git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git
 cd openclaw-skill-giraffe-guard
-bash scripts/audit.sh /要扫描的路径
+bash scripts/audit.sh /path/to/scan
+```
+
+#### 安装前扫描（推荐）
+
+```bash
+# 安装前扫描（推荐）
+bash scripts/audit.sh --pre-install https://github.com/user/some-skill.git
+
+# 扫描本地下载的 skill
+bash scripts/audit.sh --pre-install /path/to/downloaded/skill
 ```
 
 ### 使用方法
@@ -210,89 +240,40 @@ bash scripts/audit.sh /要扫描的路径
 # 基本扫描
 bash scripts/audit.sh /path/to/skills
 
-# 详细模式（显示匹配行上下文）
-bash scripts/audit.sh --verbose /path/to/skills
+# 安装前扫描
+bash scripts/audit.sh --pre-install https://github.com/user/skill-repo.git
 
-# JSON 格式输出（适合 CI/CD 集成）
-bash scripts/audit.sh --json /path/to/skills
+# 静默模式（仅输出摘要 + 退出码，适合 CI/CD）
+bash scripts/audit.sh --quiet --fail-on CRITICAL /path/to/skills
 
-# 指定白名单
-bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
+# SARIF 输出（GitHub Code Scanning 集成）
+bash scripts/audit.sh --sarif /path/to/skills > results.sarif
 
-# 自定义上下文行数（默认 2 行）
-bash scripts/audit.sh --verbose --context 5 /path/to/skills
+# 跳过特定规则
+bash scripts/audit.sh --skip-rule pipe-execution /path/to/skills
 
-# 跳过目录（可重复使用）
-bash scripts/audit.sh --skip-dir node_modules --skip-dir vendor /path/to/skills
-```
+# 仅报告严重级别
+bash scripts/audit.sh --min-severity CRITICAL /path/to/skills
 
-### 检测规则
-
-#### 🔴 严重级别（需立即处理）
-
-| 编号 | 规则 | 说明 |
-|------|------|------|
-| 1 | pipe-execution | 管道执行（curl/wget 管道到 bash/sh/python） |
-| 2 | base64-decode-pipe | Base64 解码后管道执行 |
-| 3 | security-bypass | macOS 安全机制绕过（Gatekeeper/SIP） |
-| 5 | tor-onion-address | Tor 暗网地址 |
-| 5 | reverse-shell | 反向 shell 模式 |
-| 7 | file-type-disguise | 文本扩展名伪装二进制文件（Mach-O/ELF/PE） |
-| 8 | ssh-key-exfiltration | SSH 密钥通过网络外传 |
-| 8 | cloud-credential-access | 云服务凭证访问（AWS/GCP/Azure） |
-| 8 | env-exfiltration | 环境变量通过网络外传 |
-| 9 | anti-sandbox | 反沙盒/反调试技术 |
-| 10 | covert-downloader | 单行脚本下载器（Python/Node/Ruby/Perl/PowerShell） |
-| 11 | persistence-launchagent | macOS LaunchAgent 持久化 |
-| 13 | string-concat-bypass | 字符串拼接绕过检测 |
-| 15 | env-file-leak | .env 文件包含真实密钥 |
-| 16 | typosquat-npm/pip | npm/pip 包名 typosquatting |
-| 17 | malicious-postinstall | 恶意生命周期脚本（postinstall/setup.py） |
-| 18 | git-hooks | 活跃的 git hooks（git 操作时自动执行） |
-| 19 | sensitive-file-leak | 私钥、凭证文件提交到仓库 |
-| 20 | skillmd-prompt-injection | SKILL.md 中的 prompt 注入 |
-| 21 | dockerfile-privileged | Docker 特权模式运行 |
-| 22 | zero-width-chars | 隐藏的零宽 Unicode 字符 |
-
-#### 🟡 警告级别（建议人工复核）
-
-| 编号 | 规则 | 说明 |
-|------|------|------|
-| 2 | long-base64-string | 超长 Base64 编码字符串 |
-| 4 | dangerous-permissions | 危险权限修改 |
-| 5 | suspicious-network-ip | 非本地 IP 直连 |
-| 5 | netcat-listener | netcat 监听 |
-| 6 | covert-exec-eval | 可疑 eval() 调用（含 JS/TS） |
-| 6 | covert-exec-python | Python 文件中的 os.system/subprocess |
-| 11 | cron-injection | 定时任务注入 |
-| 12 | hidden-executable | 隐藏的可执行文件 |
-| 13 | hex/unicode-obfuscation | hex/Unicode 转义混淆 |
-| 14 | symlink-sensitive | 符号链接指向敏感位置 |
-| 16 | custom-registry | 使用非官方包管理 registry |
-| 20 | skillmd-privilege-escalation | SKILL.md 中的权限提升 |
-| 21 | dockerfile-sensitive-mount | 挂载主机敏感目录 |
-| 21 | dockerfile-host-network | 容器使用主机网络模式 |
-
-### 白名单格式
-
-```txt
-# 整个文件加白
-path/to/trusted-file.sh
-
-# 特定行号加白
-path/to/file.sh:42
-
-# 特定规则加白
-path/to/file.sh:pipe-execution
+# 查看所有可用规则
+bash scripts/audit.sh --list-rules
 ```
 
 ### 退出码
 
 | 退出码 | 含义 |
 |--------|------|
-| 0 | ✅ 安全 — 无发现 |
-| 1 | 🟡 有警告级别发现 |
-| 2 | 🔴 有严重级别发现 |
+| 0 | 安全 — 无发现 |
+| 1 | 有警告级别发现 |
+| 2 | 有严重级别发现 |
+
+### CI/CD 集成
+
+```yaml
+# GitHub Actions — 仅在有严重发现时失败
+- name: Security Audit
+  run: bash scripts/audit.sh --quiet --fail-on CRITICAL ./skills
+```
 
 ### 在 OpenClaw 中自动化
 
@@ -301,15 +282,10 @@ path/to/file.sh:pipe-execution
 ```markdown
 ## Skill 安全审计（强制规则）
 每个新 skill 必须扫描后才能启用：
-1. 运行：`bash skills/security-pro/scripts/audit.sh <新skill路径>`
+1. 运行：`bash skills/security-pro/scripts/audit.sh --pre-install <新skill的URL>`
 2. 退出码 0 → 安全可用
 3. 退出码 1 → 告知用户警告内容
 4. 退出码 2 → 禁止启用，通知用户
-```
-
-通过 OpenClaw cron 设置每日自动巡检：
-```
-0 4 * * * bash skills/security-pro/scripts/audit.sh /path/to/skills
 ```
 
 ---
@@ -326,6 +302,6 @@ When adding new detection rules / 添加新检测规则时请：
 
 1. Add the check function in `scripts/audit.sh` / 在脚本中添加检测函数
 2. Call it from `scan_file()` or `main()` / 在扫描流程中调用
-3. Update `SKILL.md` rule table / 更新规则表
+3. Test with `--list-rules` to verify rule is listed / 用 `--list-rules` 验证规则已列出
 4. Test against both clean skills and malicious samples / 用正常和恶意样本测试
-5. Ensure zero false positives on standard OpenClaw bundled skills / 确保零误报
+5. Ensure zero false positives via self-scan / 通过自扫描确保零误报

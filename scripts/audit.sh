@@ -26,6 +26,7 @@ JSON_OUTPUT=false
 SARIF_OUTPUT=false
 STRICT_MODE=false
 PRE_INSTALL=false
+QUIET=false
 WHITELIST_FILE=""
 TARGET_DIR=""
 CONTEXT_LINES=2  # context lines for --verbose
@@ -59,7 +60,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS] <target-directory>
 
-OpenClaw Skill Security Auditor v${VERSION}
+🦒 Giraffe Guard v${VERSION} — OpenClaw Skill Security Auditor
 Scan skill directories for supply chain attacks and malicious code.
 
 Options:
@@ -67,29 +68,101 @@ Options:
   --json            Output JSON report
   --sarif           Output SARIF format (for GitHub Code Scanning)
   --strict          Enable strict mode (high entropy detection)
+  --quiet           Quiet mode: only output summary and exit code
   --whitelist F     Specify whitelist file
   --context N       Context lines (default: 2, used with --verbose)
   --skip-dir D      Skip directory name (repeatable)
-  --skip-rule R     Skip a specific rule (repeatable, e.g. --skip-rule pipe-execution)
+  --skip-rule R     Skip a specific rule (repeatable, use --list-rules to see names)
   --min-severity S  Minimum severity to report: INFO, WARNING, CRITICAL
   --fail-on S       Set exit code threshold: WARNING (default) or CRITICAL
   --pre-install     Pre-install mode: scan BEFORE npm/pip install (accepts git URL or local dir)
+  --list-rules      List all available detection rules and exit
   --version         Show version
   -h, --help        Show help
 
 Examples:
   $(basename "$0") /path/to/skills
   $(basename "$0") --verbose --json /path/to/skills
-  $(basename "$0") --whitelist whitelist.txt /path/to/skills
-  $(basename "$0") --skip-dir node_modules --skip-dir vendor /path/to/skills
+  $(basename "$0") --quiet --fail-on CRITICAL /path/to/skills
   $(basename "$0") --skip-rule pipe-execution --min-severity WARNING /path/to/skills
   $(basename "$0") --sarif /path/to/skills > results.sarif
   $(basename "$0") --pre-install https://github.com/user/skill-repo.git
+  $(basename "$0") --list-rules
 
 Exit codes:
   0  Clean (no findings above threshold)
   1  Warnings found (or above --fail-on threshold)
   2  Critical findings found
+EOF
+    exit 0
+}
+
+list_rules() {
+    cat <<EOF
+🦒 Giraffe Guard v${VERSION} — Detection Rules
+
+Grep-based rules (always active):
+  RULE NAME                   SEVERITY    DESCRIPTION
+  pipe-execution              CRITICAL    curl/wget piped to shell (curl|bash)
+  base64-decode-pipe          CRITICAL    Base64 decoded and piped to execution
+  base64-echo-decode          CRITICAL    Echo piped to base64 decode
+  long-base64-string          WARNING     Suspiciously long Base64 encoded string
+  security-bypass             CRITICAL    macOS Gatekeeper / quarantine bypass
+  dangerous-permissions       WARNING     chmod 777, setuid, chown root
+  suspicious-network-ip       WARNING     Direct IP connection (non-private)
+  tor-onion-address           CRITICAL    .onion domain usage
+  reverse-shell               CRITICAL    Reverse shell patterns (nc -e, /dev/tcp)
+  netcat-listener             WARNING     Netcat listener
+  covert-exec-python          WARNING     os.system() / subprocess in unexpected context
+  covert-exec-eval            WARNING     eval() in shell/JS/TS files
+  file-disguise               WARNING     Double extensions (.pdf.exe, .jpg.sh)
+  sensitive-data-access       WARNING     /etc/passwd, /etc/shadow access
+  anti-sandbox                CRITICAL    Anti-debug techniques (ptrace, LD_PRELOAD)
+  covert-downloader-python    CRITICAL    Python one-liner downloader
+  covert-downloader-node      CRITICAL    Node one-liner downloader
+  covert-downloader-powershell CRITICAL   PowerShell download cradles
+  cron-injection              WARNING     Crontab / LaunchAgent modification
+  persistence-launchagent     CRITICAL    LaunchAgent/Daemon creation
+  encoding-obfuscation        WARNING     Hex/octal/unicode escape sequences
+  suspicious-npm-package      WARNING     Known malicious npm packages
+  postinstall-script          WARNING     npm lifecycle scripts with network/exec
+  skillmd-injection           WARNING     Skill.md with embedded code injection
+  dockerfile-privileged       WARNING     Dockerfile privileged / ADD from URL
+  zero-width-chars            WARNING     Zero-width unicode characters
+  hardcoded-aws-key           CRITICAL    AWS access key (AKIA...)
+  hardcoded-github-token      CRITICAL    GitHub personal access token (ghp_...)
+  hardcoded-stripe-key        CRITICAL    Stripe live secret key (sk_live_...)
+  hardcoded-slack-token       CRITICAL    Slack token (xoxb-/xoxp-/xoxs-)
+  hardcoded-slack-webhook     WARNING     Slack webhook URL
+  hardcoded-generic-secret    WARNING     password/secret/api_key = "..."
+  hardcoded-private-key       CRITICAL    Embedded private key (BEGIN.*PRIVATE KEY)
+  actions-unpinned            WARNING     GitHub Actions not pinned to SHA
+  actions-script-injection    CRITICAL    Untrusted input in workflow expression
+  actions-excessive-permissions  WARNING  Workflow with write-all permissions
+  build-script-download       WARNING     Download in Makefile/configure
+  build-script-obfuscation    WARNING     Encoded content in build scripts
+  pyproject-suspicious-hook   CRITICAL    Suspicious code in pyproject.toml
+  npm-obfuscated-lifecycle    WARNING     Obfuscated npm lifecycle scripts
+  gemfile-untrusted-source    WARNING     Gem from non-standard git source
+
+AST-based rules (Python files, requires python3):
+  ast-eval-dynamic            CRITICAL    eval/exec with non-literal argument
+  ast-compile-exec            WARNING     compile() with exec/eval mode
+  ast-dynamic-import          CRITICAL    __import__/importlib with dynamic name
+  ast-dangerous-import        WARNING     __import__ of os/subprocess/ctypes
+  ast-getattr-dynamic         WARNING     getattr() with dynamic attribute
+  ast-getattr-dangerous       CRITICAL    getattr(obj, 'system'/'Popen'/etc)
+  ast-command-concat          CRITICAL    os.system/subprocess with string concat
+  ast-command-fstring         CRITICAL    os.system/subprocess with f-string
+  ast-suspicious-command      WARNING     Static command with curl/wget/nc/base64
+  ast-b64-exec                CRITICAL    base64.b64decode() passed to exec
+  ast-codec-obfuscation       WARNING     codecs.decode with rot13/hex
+  ast-system-write            CRITICAL    open() writing to system paths
+  ast-system-read             INFO        open() reading system paths
+  ast-env-access              INFO        Accessing sensitive env vars
+  ast-high-entropy-string     WARNING     High Shannon entropy string assignment
+  ast-string-concat-cmd       CRITICAL    String concatenation builds shell command
+  ast-bare-except-pass        INFO        Bare except:pass silences all errors
 EOF
     exit 0
 }
@@ -102,12 +175,14 @@ while [[ $# -gt 0 ]]; do
         --sarif) SARIF_OUTPUT=true; JSON_OUTPUT=true; shift ;;
         --strict) STRICT_MODE=true; shift ;;
         --pre-install) PRE_INSTALL=true; shift ;;
+        --quiet) QUIET=true; shift ;;
         --whitelist) WHITELIST_FILE="$2"; shift 2 ;;
         --context) CONTEXT_LINES="$2"; shift 2 ;;
         --skip-dir) SKIP_DIRS+=("$2"); shift 2 ;;
         --skip-rule) SKIP_RULES+=("$2"); shift 2 ;;
         --min-severity) MIN_SEVERITY="$2"; shift 2 ;;
         --fail-on) FAIL_ON="$2"; shift 2 ;;
+        --list-rules) list_rules ;;
         --version) echo "giraffe-guard v${VERSION}"; exit 0 ;;
         -h|--help) usage ;;
         -*) echo "Unknown option: $1"; exit 1 ;;
@@ -396,14 +471,16 @@ add_finding() {
     else
         local color tag
         case "$level" in
-            CRITICAL) color="$RED"; tag="🔴" ;;
-            WARNING)  color="$YELLOW"; tag="🟡" ;;
-            INFO)     color="$CYAN"; tag="[i]" ;;
+            CRITICAL) color="$RED"; tag="CRIT" ;;
+            WARNING)  color="$YELLOW"; tag="WARN" ;;
+            INFO)     color="$CYAN"; tag="INFO" ;;
         esac
-        if [[ "$wl_status" == "WHITELISTED" ]]; then
-            echo -e "  ${DIM}[WHITELISTED] ${tag} ${level} | ${filepath}:${lineno} | ${rule}${NC}"
+        if [[ "$QUIET" == true ]]; then
+            : # suppress per-finding output in quiet mode
+        elif [[ "$wl_status" == "WHITELISTED" ]]; then
+            echo -e "  ${DIM}[WHITELISTED] ${level} | ${filepath}:${lineno} | ${rule}${NC}"
         else
-            echo -e "  ${color}${tag} ${level}${NC} | ${BOLD}${filepath}:${lineno}${NC} | ${CYAN}${rule}${NC}"
+            echo -e "  ${color}[${tag}]${NC} | ${BOLD}${filepath}:${lineno}${NC} | ${CYAN}${rule}${NC}"
             echo -e "     ${DIM}${content}${NC}"
             if [[ -n "$fix_hint" ]]; then
                 echo -e "     ${GREEN}>> FIX: ${fix_hint}${NC}"
@@ -1059,24 +1136,29 @@ check_enhanced_lifecycle() {
 # ============================================================
 
 print_banner() {
-    if [[ "$JSON_OUTPUT" != true ]]; then
+    if [[ "$JSON_OUTPUT" != true && "$QUIET" != true ]]; then
         echo ""
         echo -e "${BOLD}╔═══════════════════════════════════════════════╗${NC}"
         echo -e "${BOLD}║   🦒 Giraffe Guard v${VERSION} — 长颈鹿卫士       ║${NC}"
         echo -e "${BOLD}╚═══════════════════════════════════════════════╝${NC}"
         echo ""
-        echo -e "  ${CYAN}Target:${NC} $TARGET_DIR"
+        echo -e "  ${CYAN}Target:${NC}  $TARGET_DIR"
+        if [[ -n "$PYTHON3_PATH" ]]; then
+            echo -e "  ${CYAN}AST:${NC}     ${GREEN}enabled${NC} (deep Python analysis)"
+        else
+            echo -e "  ${CYAN}AST:${NC}     ${DIM}disabled (python3 not found)${NC}"
+        fi
         [[ -n "$WHITELIST_FILE" ]] && echo -e "  ${CYAN}Whitelist:${NC} $WHITELIST_FILE (${#WHITELIST_ENTRIES[@]} entries)"
-        [[ "$VERBOSE" == true ]] && echo -e "  ${CYAN}Verbose:${NC} context ${CONTEXT_LINES} lines"
-        [[ "$STRICT_MODE" == true ]] && echo -e "  ${CYAN}Strict:${NC} high entropy detection enabled"
+        [[ "$VERBOSE" == true ]] && echo -e "  ${CYAN}Verbose:${NC}  context ${CONTEXT_LINES} lines"
+        [[ "$STRICT_MODE" == true ]] && echo -e "  ${CYAN}Strict:${NC}  high entropy detection enabled"
         if [[ ${#SKIP_DIRS[@]} -gt 0 ]]; then
-            echo -e "  ${CYAN}Skipping dirs:${NC} ${SKIP_DIRS[*]}"
+            echo -e "  ${CYAN}Skipping dirs:${NC}  ${SKIP_DIRS[*]}"
         fi
         if [[ ${#SKIP_RULES[@]} -gt 0 ]]; then
             echo -e "  ${CYAN}Skipping rules:${NC} ${SKIP_RULES[*]}"
         fi
-        [[ -n "$MIN_SEVERITY" ]] && echo -e "  ${CYAN}Min severity:${NC} $MIN_SEVERITY"
-        [[ -n "$FAIL_ON" ]] && echo -e "  ${CYAN}Fail on:${NC} $FAIL_ON"
+        [[ -n "$MIN_SEVERITY" ]] && echo -e "  ${CYAN}Min severity:${NC}  $MIN_SEVERITY"
+        [[ -n "$FAIL_ON" ]] && echo -e "  ${CYAN}Fail on:${NC}  $FAIL_ON"
         echo ""
         echo -e "${BOLD}-----------------------------------------------${NC}"
     fi
@@ -1084,15 +1166,18 @@ print_banner() {
 
 scan_file() {
     local file="$1"
-    # Exclude self
+    # Exclude self and companion scripts
     local realfile
     realfile="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
     [[ "$realfile" == "$SELF_PATH" ]] && return 0
+    local self_dir
+    self_dir="$(dirname "$SELF_PATH")"
+    [[ "$realfile" == "$self_dir/ast_analyzer.py" ]] && return 0
 
     echo $(( $(cat "$TMPDIR_AUDIT/files") + 1 )) > "$TMPDIR_AUDIT/files"
 
     # Progress indicator (every 50 files)
-    if [[ "$JSON_OUTPUT" != true ]]; then
+    if [[ "$JSON_OUTPUT" != true && "$QUIET" != true ]]; then
         local fsc
         fsc=$(cat "$TMPDIR_AUDIT/files")
         if [[ $((fsc % 50)) -eq 0 ]]; then
@@ -1281,20 +1366,20 @@ main() {
         echo -e "  Files scanned: ${BOLD}${fsc}${NC}"
         echo -e "  Total findings: ${BOLD}${fc}${NC}"
         if [[ $cc -gt 0 ]]; then
-            echo -e "  🔴 Critical:  ${RED}${BOLD}${cc}${NC}"
+            echo -e "  ${RED}Critical:  ${BOLD}${cc}${NC}"
         else
-            echo -e "  🔴 Critical:  ${GREEN}0${NC}"
+            echo -e "  Critical:  ${GREEN}0${NC}"
         fi
         if [[ $wc -gt 0 ]]; then
-            echo -e "  🟡 Warning:   ${YELLOW}${BOLD}${wc}${NC}"
+            echo -e "  ${YELLOW}Warning:   ${BOLD}${wc}${NC}"
         else
-            echo -e "  🟡 Warning:   ${GREEN}0${NC}"
+            echo -e "  Warning:   ${GREEN}0${NC}"
         fi
         if [[ $ic -gt 0 ]]; then
-            echo -e "  [i]  Info:      ${CYAN}${ic}${NC}"
+            echo -e "  ${CYAN}Info:      ${ic}${NC}"
         fi
         if [[ $wlc -gt 0 ]]; then
-            echo -e "  [w]  Whitelisted: ${DIM}${wlc}${NC}"
+            echo -e "  ${DIM}Whitelisted: ${wlc}${NC}"
         fi
         echo ""
 
@@ -1308,7 +1393,7 @@ main() {
         fi
 
         if [[ $fc -eq 0 ]]; then
-            echo -e "  ${GREEN}${BOLD}✅ PASS - No security issues found.${NC}"
+            echo -e "  ${GREEN}${BOLD}PASS - No security issues found.${NC}"
         elif [[ $cc -gt 0 ]]; then
             echo -e "  ${RED}${BOLD}FAIL - Critical security issues detected! Immediate review required.${NC}"
         elif [[ $wc -gt 0 ]]; then
@@ -1324,15 +1409,15 @@ main() {
             echo -e "${BOLD}  Pre-Install Verdict${NC}"
             echo -e "${BOLD}-----------------------------------------------${NC}"
             if [[ $cc -gt 0 ]]; then
-                echo -e "  ${RED}${BOLD}🚫 DO NOT INSTALL${NC}"
+                echo -e "  ${RED}${BOLD}DO NOT INSTALL${NC}"
                 echo -e "  ${RED}Critical security issues found. This skill may contain malicious code.${NC}"
                 echo -e "  ${RED}Running npm/pip install is NOT safe.${NC}"
             elif [[ $wc -gt 0 ]]; then
-                echo -e "  ${YELLOW}${BOLD}⚠️  INSTALL WITH CAUTION${NC}"
+                echo -e "  ${YELLOW}${BOLD}INSTALL WITH CAUTION${NC}"
                 echo -e "  ${YELLOW}Warnings found. Review the findings above before installing.${NC}"
                 echo -e "  ${YELLOW}If you trust the source, you may proceed with: npm install / pip install${NC}"
             else
-                echo -e "  ${GREEN}${BOLD}✅ SAFE TO INSTALL${NC}"
+                echo -e "  ${GREEN}${BOLD}SAFE TO INSTALL${NC}"
                 echo -e "  ${GREEN}No security issues found. You may safely run: npm install / pip install${NC}"
             fi
         fi
