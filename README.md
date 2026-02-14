@@ -15,24 +15,23 @@ A security scanner for [OpenClaw](https://github.com/openclaw/openclaw) skills �
 
 ### Features
 
-- **17 detection rules** covering the full supply chain attack surface
+- **22 detection rules** covering the full supply chain attack surface
 - **Context-aware** — distinguishes documentation from executable code (low false positives)
-- **Zero dependencies** — only uses bash, grep, sed, find, file, awk
+- **Zero dependencies** — only uses bash, grep, sed, find, file, awk, perl
 - **Cross-platform** — macOS (BSD) and Linux (GNU) compatible
 - **Multiple output formats** — colored terminal, JSON reports
 - **Whitelist support** — suppress known-safe findings
 - **Verbose mode** — show surrounding context lines for each finding
+- **Skip directories** — exclude directories like node_modules or vendor
 
 ### Quick Start
 
 #### As an OpenClaw Skill
 
 ```bash
-# Clone into your OpenClaw skills directory
 git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
-# Scan your skills
 bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/workspace/skills/
 ```
 
@@ -40,7 +39,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 
 ```bash
 git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git
-cd openclaw-skill-security-pro
+cd openclaw-skill-giraffe-guard
 bash scripts/audit.sh /path/to/scan
 ```
 
@@ -61,6 +60,9 @@ bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
 
 # Custom context lines (default: 2)
 bash scripts/audit.sh --verbose --context 5 /path/to/skills
+
+# Skip directories (repeatable)
+bash scripts/audit.sh --skip-dir node_modules --skip-dir vendor /path/to/skills
 ```
 
 ### Detection Rules
@@ -85,6 +87,11 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 15 | env-file-leak | `.env` file containing real secrets |
 | 16 | typosquat-npm/pip | Typosquatting package names |
 | 17 | malicious-postinstall | Malicious lifecycle scripts |
+| 18 | git-hooks | Active git hooks that auto-execute |
+| 19 | sensitive-file-leak | Private keys, credentials committed to repo |
+| 20 | skillmd-prompt-injection | Prompt injection in SKILL.md |
+| 21 | dockerfile-privileged | Privileged Docker containers |
+| 22 | zero-width-chars | Hidden zero-width Unicode characters |
 
 #### 🟡 Warning (manual review recommended)
 
@@ -94,12 +101,16 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 4 | dangerous-permissions | Dangerous permission changes |
 | 5 | suspicious-network-ip | Direct IP connections (non-local) |
 | 5 | netcat-listener | Netcat listeners |
-| 6 | covert-exec-eval | Suspicious eval() calls |
+| 6 | covert-exec-eval | Suspicious eval() calls (includes JS/TS) |
+| 6 | covert-exec-python | os.system/subprocess in Python files |
 | 11 | cron-injection | Cron/launchctl/systemd injection |
 | 12 | hidden-executable | Hidden executable files |
 | 13 | hex/unicode-obfuscation | Hex/Unicode escape obfuscation |
 | 14 | symlink-sensitive | Symlinks pointing to sensitive locations |
 | 16 | custom-registry | Non-official package registries |
+| 20 | skillmd-privilege-escalation | Privilege escalation in SKILL.md |
+| 21 | dockerfile-sensitive-mount | Sensitive host directory mounts |
+| 21 | dockerfile-host-network | Host network mode |
 
 ### Whitelist File Format
 
@@ -141,7 +152,7 @@ path/to/file.sh:pipe-execution
 Add to your `TOOLS.md` to enforce scanning on every skill install:
 
 ```markdown
-## 🛡️ Skill Security Audit (mandatory)
+## Skill Security Audit (mandatory)
 Every new skill must be scanned before activation:
 1. Run: `bash skills/security-pro/scripts/audit.sh <new-skill-path>`
 2. Exit 0 → safe to use
@@ -165,24 +176,23 @@ Schedule daily scans via OpenClaw cron:
 
 ### 特性
 
-- **17 条检测规则**，覆盖供应链攻击全链路
+- **22 条检测规则**，覆盖供应链攻击全链路
 - **上下文感知** —— 自动区分文档描述和可执行代码，大幅降低误报
-- **零外部依赖** —— 仅使用 bash、grep、sed、find、file、awk
+- **零外部依赖** —— 仅使用 bash、grep、sed、find、file、awk、perl
 - **跨平台** —— 兼容 macOS (BSD) 和 Linux (GNU)
 - **多种输出格式** —— 彩色终端输出、JSON 报告
 - **白名单支持** —— 排除已知安全的条目
 - **详细模式** —— 显示匹配行的上下文
+- **目录跳过** —— 排除 node_modules、vendor 等目录
 
 ### 快速开始
 
 #### 作为 OpenClaw Skill 使用
 
 ```bash
-# 克隆到 OpenClaw 技能目录
 git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git \
   ~/.openclaw/workspace/skills/security-pro
 
-# 扫描你的技能
 bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/workspace/skills/
 ```
 
@@ -190,7 +200,7 @@ bash ~/.openclaw/workspace/skills/security-pro/scripts/audit.sh ~/.openclaw/work
 
 ```bash
 git clone https://github.com/lida408/openclaw-skill-giraffe-guard.git
-cd openclaw-skill-security-pro
+cd openclaw-skill-giraffe-guard
 bash scripts/audit.sh /要扫描的路径
 ```
 
@@ -211,6 +221,9 @@ bash scripts/audit.sh --whitelist whitelist.txt /path/to/skills
 
 # 自定义上下文行数（默认 2 行）
 bash scripts/audit.sh --verbose --context 5 /path/to/skills
+
+# 跳过目录（可重复使用）
+bash scripts/audit.sh --skip-dir node_modules --skip-dir vendor /path/to/skills
 ```
 
 ### 检测规则
@@ -235,6 +248,11 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 15 | env-file-leak | .env 文件包含真实密钥 |
 | 16 | typosquat-npm/pip | npm/pip 包名 typosquatting |
 | 17 | malicious-postinstall | 恶意生命周期脚本（postinstall/setup.py） |
+| 18 | git-hooks | 活跃的 git hooks（git 操作时自动执行） |
+| 19 | sensitive-file-leak | 私钥、凭证文件提交到仓库 |
+| 20 | skillmd-prompt-injection | SKILL.md 中的 prompt 注入 |
+| 21 | dockerfile-privileged | Docker 特权模式运行 |
+| 22 | zero-width-chars | 隐藏的零宽 Unicode 字符 |
 
 #### 🟡 警告级别（建议人工复核）
 
@@ -244,12 +262,16 @@ bash scripts/audit.sh --verbose --context 5 /path/to/skills
 | 4 | dangerous-permissions | 危险权限修改 |
 | 5 | suspicious-network-ip | 非本地 IP 直连 |
 | 5 | netcat-listener | netcat 监听 |
-| 6 | covert-exec-eval | 可疑 eval() 调用 |
+| 6 | covert-exec-eval | 可疑 eval() 调用（含 JS/TS） |
+| 6 | covert-exec-python | Python 文件中的 os.system/subprocess |
 | 11 | cron-injection | 定时任务注入 |
 | 12 | hidden-executable | 隐藏的可执行文件 |
 | 13 | hex/unicode-obfuscation | hex/Unicode 转义混淆 |
 | 14 | symlink-sensitive | 符号链接指向敏感位置 |
 | 16 | custom-registry | 使用非官方包管理 registry |
+| 20 | skillmd-privilege-escalation | SKILL.md 中的权限提升 |
+| 21 | dockerfile-sensitive-mount | 挂载主机敏感目录 |
+| 21 | dockerfile-host-network | 容器使用主机网络模式 |
 
 ### 白名单格式
 
@@ -277,7 +299,7 @@ path/to/file.sh:pipe-execution
 在 `TOOLS.md` 中添加规则，强制每次安装 skill 前扫描：
 
 ```markdown
-## 🛡️ Skill 安全审计（强制规则）
+## Skill 安全审计（强制规则）
 每个新 skill 必须扫描后才能启用：
 1. 运行：`bash skills/security-pro/scripts/audit.sh <新skill路径>`
 2. 退出码 0 → 安全可用
@@ -298,10 +320,12 @@ path/to/file.sh:pipe-execution
 
 ## Contributing / 贡献
 
-欢迎提交 Issue 和 PR。添加新检测规则时请：
+Issues and PRs welcome! / 欢迎提交 Issue 和 PR！
 
-1. 在 `scripts/audit.sh` 中添加检测函数
-2. 在 `scan_file()`（文件级）或 `main()`（目录级）中调用
-3. 更新 `SKILL.md` 规则表
-4. 用正常 skill 和恶意样本分别测试
-5. 确保对 OpenClaw 内置 skill 零误报
+When adding new detection rules / 添加新检测规则时请：
+
+1. Add the check function in `scripts/audit.sh` / 在脚本中添加检测函数
+2. Call it from `scan_file()` or `main()` / 在扫描流程中调用
+3. Update `SKILL.md` rule table / 更新规则表
+4. Test against both clean skills and malicious samples / 用正常和恶意样本测试
+5. Ensure zero false positives on standard OpenClaw bundled skills / 确保零误报
